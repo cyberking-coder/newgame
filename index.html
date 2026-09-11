@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Neon Catcher — Bouncing Ball Arcade</title>
+<style>
+  :root {
+    --bg-0: #05060f;
+    --bg-1: #0a0f2a;
+    --bg-2: #1a1040;
+    --accent: #00e5ff;
+    --accent-2: #ff2bd6;
+    --accent-3: #7cff7a;
+    --text: #e8f0ff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: radial-gradient(1200px 800px at 50% 20%, #16123a 0%, #05060f 60%, #000 100%);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #stage {
+    position: relative;
+    width: min(100vw, 100vh * 0.6);
+    max-width: 720px;
+    aspect-ratio: 3 / 5;
+    height: min(100vh, 720px / 0.6);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.06),
+      0 20px 60px rgba(0, 229, 255, 0.15),
+      0 40px 120px rgba(255, 43, 214, 0.10),
+      inset 0 0 80px rgba(0,0,0,0.6);
+    background:
+      radial-gradient(600px 400px at 30% 0%, rgba(0,229,255,0.15), transparent 60%),
+      radial-gradient(600px 500px at 80% 100%, rgba(255,43,214,0.15), transparent 60%),
+      linear-gradient(180deg, #0a0e26 0%, #04050f 100%);
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  .hud {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    padding: 14px 16px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .chip {
+    background: rgba(10,14,40,0.55);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    text-shadow: 0 0 12px rgba(0,229,255,0.5);
+  }
+  .chip b { color: var(--accent); font-weight: 800; }
+  .chip .pink { color: var(--accent-2); }
+  .chip .green { color: var(--accent-3); }
+
+  .overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(closest-side, rgba(0,0,0,0.35), rgba(0,0,0,0.8));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: opacity 240ms ease;
+    pointer-events: auto;
+  }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+  .card {
+    text-align: center;
+    padding: 28px 26px;
+    border-radius: 18px;
+    background: linear-gradient(160deg, rgba(20,15,60,0.9), rgba(6,8,24,0.85));
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 20px 60px rgba(0,229,255,0.15), 0 40px 120px rgba(255,43,214,0.15);
+    max-width: 92%;
+  }
+  .title {
+    font-size: clamp(28px, 6vw, 44px);
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    background: linear-gradient(90deg, #00e5ff, #a86bff, #ff2bd6);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 24px rgba(168, 107, 255, 0.35);
+    margin: 0 0 8px;
+  }
+  .subtitle {
+    font-size: 14px;
+    opacity: 0.75;
+    margin: 0 0 20px;
+    line-height: 1.5;
+  }
+  .btn {
+    display: inline-block;
+    cursor: pointer;
+    border: none;
+    padding: 12px 22px;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 1px;
+    color: #04050f;
+    background: linear-gradient(90deg, #00e5ff, #a86bff, #ff2bd6);
+    box-shadow: 0 10px 30px rgba(0,229,255,0.35), 0 8px 24px rgba(255,43,214,0.25);
+    transition: transform 120ms ease, filter 120ms ease;
+  }
+  .btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
+  .btn:active { transform: translateY(1px); }
+
+  .keys {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px; margin: 18px auto 0; max-width: 300px;
+    font-size: 12px;
+  }
+  .keys div {
+    padding: 8px 6px; border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .keys kbd {
+    display: inline-block; min-width: 24px; padding: 2px 6px;
+    border-radius: 4px; background: #1a1f45; border: 1px solid #303772;
+    font-family: ui-monospace, monospace; font-size: 11px; color: #cfe;
+  }
+
+  .touch {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    display: none;
+    pointer-events: auto;
+    padding: 12px;
+    gap: 10px;
+    justify-content: space-between;
+  }
+  .touch button {
+    flex: 1; height: 56px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(20,15,60,0.55);
+    backdrop-filter: blur(8px);
+    color: var(--text);
+    font-size: 22px; font-weight: 800;
+    box-shadow: inset 0 0 20px rgba(0,229,255,0.1);
+  }
+  .touch button:active { background: rgba(60,30,120,0.6); }
+
+  @media (pointer: coarse) {
+    .touch { display: flex; }
+    .hud { padding-bottom: 84px; }
+  }
+
+  .flash {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(closest-side, rgba(124,255,122,0.35), transparent 60%);
+    opacity: 0; transition: opacity 400ms ease;
+  }
+  .flash.on { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <div class="flash" id="flash"></div>
+
+    <div class="hud">
+      <div class="row">
+        <div class="chip">SCORE <b id="score">0</b></div>
+        <div class="chip">BEST <span class="pink" id="best">0</span></div>
+        <div class="chip">LIVES <span class="green" id="lives">3</span></div>
+      </div>
+      <div class="row" style="justify-content:center">
+        <div class="chip" id="combo" style="opacity:0.7">Combo x<b id="comboN">1</b></div>
+      </div>
+    </div>
+
+    <div class="touch" id="touch">
+      <button data-k="ArrowLeft">◀</button>
+      <button data-k="ArrowDown">▼</button>
+      <button data-k="ArrowRight">▶</button>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="card">
+        <h1 class="title">NEON CATCHER</h1>
+        <p class="subtitle">
+          A glowing ball bounces around the arena.<br />
+          Drive your catcher tile <b>downward</b> to snag it before it slips past.
+        </p>
+        <button class="btn" id="startBtn">START</button>
+        <div class="keys">
+          <div><kbd>◀</kbd> <kbd>▶</kbd> move</div>
+          <div><kbd>▼</kbd> drop</div>
+          <div><kbd>Space</kbd> pause</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const stage = document.getElementById('stage');
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const livesEl = document.getElementById('lives');
+  const comboEl = document.getElementById('comboN');
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+  const flash = document.getElementById('flash');
+
+  let DPR = Math.min(window.devicePixelRatio || 1, 2);
+  let W = 0, H = 0;
+
+  function resize() {
+    const rect = stage.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---- audio ----
+  let audioCtx = null;
+  function beep(freq = 440, dur = 0.08, type = 'sine', gain = 0.05) {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.value = gain;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start();
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+      o.stop(audioCtx.currentTime + dur + 0.02);
+    } catch (e) {}
+  }
+
+  // ---- state ----
+  const state = {
+    running: false,
+    paused: false,
+    score: 0,
+    best: +(localStorage.getItem('nc_best') || 0),
+    lives: 3,
+    combo: 1,
+    time: 0,
+    ball: null,
+    tile: null,
+    particles: [],
+    stars: [],
+    shakes: 0,
+    hitCooldown: 0,
+  };
+  bestEl.textContent = state.best;
+
+  function initEntities() {
+    state.ball = {
+      x: W * 0.5,
+      y: H * 0.35,
+      vx: (Math.random() < 0.5 ? -1 : 1) * (W * 0.28),
+      vy: -H * 0.15,
+      r: Math.max(10, W * 0.028),
+      hue: 190,
+      trail: [],
+    };
+    state.tile = {
+      x: W * 0.5,
+      y: H * 0.72,
+      w: Math.max(90, W * 0.22),
+      h: Math.max(16, H * 0.028),
+      vx: 0, vy: 0,
+      speed: Math.max(360, W * 0.9),
+      dropping: false,
+      cooldown: 0,
+    };
+    state.stars = [];
+    for (let i = 0; i < 90; i++) {
+      state.stars.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: Math.random() * 1.6 + 0.3,
+        a: Math.random() * 0.8 + 0.2,
+        s: Math.random() * 0.4 + 0.05,
+      });
+    }
+    state.particles = [];
+  }
+
+  // ---- input ----
+  const keys = {};
+  window.addEventListener('keydown', (e) => {
+    if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+    keys[e.key] = true;
+    if (e.key === ' ') togglePause();
+    if (e.key === 'Enter' && !state.running) startGame();
+  });
+  window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+  document.querySelectorAll('#touch button').forEach(btn => {
+    const k = btn.dataset.k;
+    const down = (ev) => { ev.preventDefault(); keys[k] = true; };
+    const up = (ev) => { ev.preventDefault(); keys[k] = false; };
+    btn.addEventListener('touchstart', down, { passive: false });
+    btn.addEventListener('touchend', up);
+    btn.addEventListener('touchcancel', up);
+    btn.addEventListener('mousedown', down);
+    btn.addEventListener('mouseup', up);
+    btn.addEventListener('mouseleave', up);
+  });
+
+  // pointer drag to move tile
+  let dragging = false;
+  stage.addEventListener('pointerdown', (e) => {
+    if (!state.running) return;
+    dragging = true;
+    movePointer(e);
+  });
+  window.addEventListener('pointerup', () => { dragging = false; });
+  window.addEventListener('pointermove', (e) => { if (dragging) movePointer(e); });
+  function movePointer(e) {
+    const rect = stage.getBoundingClientRect();
+    const x = (e.clientX - rect.left);
+    if (state.tile) state.tile.x = Math.max(state.tile.w/2, Math.min(W - state.tile.w/2, x));
+  }
+
+  startBtn.addEventListener('click', () => startGame());
+
+  function startGame() {
+    resize();
+    state.running = true;
+    state.paused = false;
+    state.score = 0;
+    state.lives = 3;
+    state.combo = 1;
+    state.time = 0;
+    initEntities();
+    updateHUD();
+    overlay.classList.add('hidden');
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    beep(660, 0.06, 'triangle', 0.06);
+    beep(880, 0.06, 'triangle', 0.06);
+    lastT = performance.now();
+    requestAnimationFrame(loop);
+  }
+
+  function togglePause() {
+    if (!state.running) return;
+    state.paused = !state.paused;
+    if (!state.paused) { lastT = performance.now(); requestAnimationFrame(loop); }
+  }
+
+  function updateHUD() {
+    scoreEl.textContent = state.score;
+    bestEl.textContent = state.best;
+    livesEl.textContent = state.lives;
+    comboEl.textContent = state.combo;
+  }
+
+  function gameOver() {
+    state.running = false;
+    if (state.score > state.best) {
+      state.best = state.score;
+      localStorage.setItem('nc_best', state.best);
+    }
+    overlay.querySelector('.title').textContent = 'GAME OVER';
+    overlay.querySelector('.subtitle').innerHTML =
+      `Score <b>${state.score}</b> &nbsp;·&nbsp; Best <b style="color:#ff2bd6">${state.best}</b>`;
+    startBtn.textContent = 'PLAY AGAIN';
+    overlay.classList.remove('hidden');
+    beep(220, 0.2, 'sawtooth', 0.06);
+    beep(140, 0.35, 'sawtooth', 0.05);
+  }
+
+  function spawnParticles(x, y, hue, n = 24, speed = 260) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = (0.4 + Math.random() * 0.9) * speed;
+      state.particles.push({
+        x, y,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s,
+        life: 0.5 + Math.random() * 0.6,
+        age: 0,
+        hue: hue + (Math.random() * 40 - 20),
+        r: 1.5 + Math.random() * 2.5,
+      });
+    }
+  }
+
+  function doShake(n = 8) { state.shakes = n; }
+
+  function handleCatch() {
+    const b = state.ball, t = state.tile;
+    state.score += 10 * state.combo;
+    state.combo = Math.min(9, state.combo + 1);
+    spawnParticles(b.x, b.y, 130, 42, 340);
+    doShake(10);
+    flash.classList.add('on');
+    setTimeout(() => flash.classList.remove('on'), 260);
+    beep(880 + state.combo * 40, 0.07, 'square', 0.06);
+    beep(1320 + state.combo * 40, 0.09, 'triangle', 0.05);
+
+    // launch ball upward with an angle
+    const angle = -Math.PI/2 + (Math.random() * 0.9 - 0.45);
+    const speed = Math.min(H * 0.9, H * 0.5 + state.score * 0.6);
+    b.vx = Math.cos(angle) * speed;
+    b.vy = Math.sin(angle) * speed;
+    b.y = t.y - t.h/2 - b.r - 2;
+    b.hue = (b.hue + 40) % 360;
+    updateHUD();
+  }
+
+  function loseLife() {
+    state.lives -= 1;
+    state.combo = 1;
+    spawnParticles(state.ball.x, state.ball.y, 0, 30, 260);
+    doShake(14);
+    beep(180, 0.18, 'sawtooth', 0.06);
+    updateHUD();
+    if (state.lives <= 0) { gameOver(); return; }
+    // reset ball
+    state.ball.x = W * 0.5;
+    state.ball.y = H * 0.3;
+    state.ball.vx = (Math.random() < 0.5 ? -1 : 1) * W * 0.28;
+    state.ball.vy = -H * 0.1;
+    state.ball.trail.length = 0;
+  }
+
+  // ---- main loop ----
+  let lastT = 0;
+  function loop(now) {
+    if (!state.running || state.paused) return;
+    const dt = Math.min(0.033, (now - lastT) / 1000);
+    lastT = now;
+    state.time += dt;
+
+    update(dt);
+    render();
+
+    requestAnimationFrame(loop);
+  }
+
+  function update(dt) {
+    const b = state.ball, t = state.tile;
+
+    // tile movement
+    let ax = 0;
+    if (keys['ArrowLeft'] || keys['a'] || keys['A']) ax -= 1;
+    if (keys['ArrowRight'] || keys['d'] || keys['D']) ax += 1;
+    t.x += ax * t.speed * dt;
+    t.x = Math.max(t.w/2, Math.min(W - t.w/2, t.x));
+
+    // downward drop mechanic — tile lunges down when player presses down,
+    // then springs back up. Great for timing catches.
+    const wantDrop = keys['ArrowDown'] || keys['s'] || keys['S'];
+    const baseY = H * 0.72;
+    const dropY = H * 0.9;
+    if (wantDrop && t.cooldown <= 0) {
+      t.dropping = true;
+    }
+    if (t.dropping) {
+      t.y += (dropY - t.y) * Math.min(1, dt * 14);
+      if (dropY - t.y < 2) {
+        t.dropping = false;
+        t.cooldown = 0.15;
+      }
+    } else {
+      t.y += (baseY - t.y) * Math.min(1, dt * 10);
+    }
+    t.cooldown = Math.max(0, t.cooldown - dt);
+
+    // ball physics
+    const gravity = H * 0.9;
+    b.vy += gravity * dt;
+
+    // gentle air drag
+    b.vx *= (1 - 0.02 * dt);
+    b.vy *= (1 - 0.01 * dt);
+
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+
+    // walls
+    if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx) * 0.98; wallHit(b.x, b.y); }
+    if (b.x + b.r > W) { b.x = W - b.r; b.vx = -Math.abs(b.vx) * 0.98; wallHit(b.x, b.y); }
+    if (b.y - b.r < 0) { b.y = b.r; b.vy = Math.abs(b.vy) * 0.98; wallHit(b.x, b.y); }
+
+    // trail
+    b.trail.push({ x: b.x, y: b.y, t: state.time });
+    if (b.trail.length > 22) b.trail.shift();
+
+    // tile / ball collision (AABB vs circle)
+    if (state.hitCooldown <= 0) {
+      const tx0 = t.x - t.w/2, tx1 = t.x + t.w/2;
+      const ty0 = t.y - t.h/2, ty1 = t.y + t.h/2;
+      const cx = Math.max(tx0, Math.min(b.x, tx1));
+      const cy = Math.max(ty0, Math.min(b.y, ty1));
+      const dx = b.x - cx, dy = b.y - cy;
+      if (dx*dx + dy*dy < b.r * b.r) {
+        handleCatch();
+        state.hitCooldown = 0.15;
+      }
+    } else {
+      state.hitCooldown -= dt;
+    }
+
+    // fell off bottom
+    if (b.y - b.r > H + 20) {
+      loseLife();
+    }
+
+    // particles
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      p.age += dt;
+      if (p.age > p.life) { state.particles.splice(i, 1); continue; }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 300 * dt;
+      p.vx *= (1 - 1.2 * dt);
+    }
+
+    // stars drift
+    for (const s of state.stars) {
+      s.y += s.s * 20 * dt;
+      if (s.y > H) { s.y = 0; s.x = Math.random() * W; }
+    }
+
+    // shake decay
+    if (state.shakes > 0) state.shakes = Math.max(0, state.shakes - 40 * dt);
+  }
+
+  function wallHit(x, y) {
+    spawnParticles(x, y, state.ball.hue, 8, 140);
+    beep(520, 0.04, 'square', 0.03);
+  }
+
+  // ---- render ----
+  function render() {
+    const shake = state.shakes;
+    const sx = (Math.random() - 0.5) * shake;
+    const sy = (Math.random() - 0.5) * shake;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    // background wash
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0a0e26');
+    g.addColorStop(0.5, '#0b0820');
+    g.addColorStop(1, '#04050f');
+    ctx.fillStyle = g;
+    ctx.fillRect(-4, -4, W+8, H+8);
+
+    // grid
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = 'rgba(120, 200, 255, 0.35)';
+    ctx.lineWidth = 1;
+    const step = 40;
+    const off = (state.time * 20) % step;
+    ctx.beginPath();
+    for (let x = -off; x < W; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+    for (let y = -off; y < H; y += step) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+    ctx.stroke();
+    ctx.restore();
+
+    // horizon glow
+    const glow = ctx.createRadialGradient(W*0.5, H*0.85, 10, W*0.5, H*0.85, W*0.9);
+    glow.addColorStop(0, 'rgba(168,107,255,0.25)');
+    glow.addColorStop(1, 'rgba(168,107,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    // stars
+    for (const s of state.stars) {
+      ctx.globalAlpha = s.a * (0.6 + 0.4 * Math.sin(state.time * 3 + s.x));
+      ctx.fillStyle = '#cfe6ff';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // ball trail
+    const b = state.ball;
+    if (b) {
+      for (let i = 0; i < b.trail.length; i++) {
+        const p = b.trail[i];
+        const k = i / b.trail.length;
+        ctx.globalAlpha = k * 0.35;
+        ctx.fillStyle = `hsl(${b.hue}, 100%, 65%)`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, b.r * (0.4 + k * 0.9), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // ball glow
+      const bg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r * 4);
+      bg.addColorStop(0, `hsla(${b.hue}, 100%, 70%, 0.75)`);
+      bg.addColorStop(1, `hsla(${b.hue}, 100%, 60%, 0)`);
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r * 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ball body
+      const bodyG = ctx.createRadialGradient(b.x - b.r*0.35, b.y - b.r*0.4, b.r*0.1, b.x, b.y, b.r);
+      bodyG.addColorStop(0, `hsl(${b.hue}, 100%, 92%)`);
+      bodyG.addColorStop(0.4, `hsl(${b.hue}, 100%, 65%)`);
+      bodyG.addColorStop(1, `hsl(${(b.hue+30)%360}, 100%, 40%)`);
+      ctx.fillStyle = bodyG;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ball highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.arc(b.x - b.r*0.35, b.y - b.r*0.4, b.r*0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // tile
+    const t = state.tile;
+    if (t) {
+      const x = t.x - t.w/2, y = t.y - t.h/2;
+      // shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      roundRect(ctx, x + 3, y + 6, t.w, t.h, 8, true, false);
+
+      // glow
+      const tg = ctx.createLinearGradient(x, y, x + t.w, y + t.h);
+      tg.addColorStop(0, '#00e5ff');
+      tg.addColorStop(0.5, '#a86bff');
+      tg.addColorStop(1, '#ff2bd6');
+      ctx.save();
+      ctx.shadowColor = 'rgba(168,107,255,0.9)';
+      ctx.shadowBlur = 22;
+      ctx.fillStyle = tg;
+      roundRect(ctx, x, y, t.w, t.h, 10, true, false);
+      ctx.restore();
+
+      // gloss
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      roundRect(ctx, x + 4, y + 2, t.w - 8, t.h * 0.35, 6, true, false);
+
+      // inner tick marks
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 6; i++) {
+        const tx = x + (t.w / 6) * i;
+        ctx.beginPath();
+        ctx.moveTo(tx, y + t.h * 0.55);
+        ctx.lineTo(tx, y + t.h - 3);
+        ctx.stroke();
+      }
+    }
+
+    // particles
+    for (const p of state.particles) {
+      const k = 1 - p.age / p.life;
+      ctx.globalAlpha = k;
+      ctx.fillStyle = `hsl(${p.hue}, 100%, 70%)`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r * k + 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // vignette
+    const vg = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.4, W/2, H/2, Math.max(W,H)*0.75);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+    if (typeof r === 'number') r = { tl: r, tr: r, br: r, bl: r };
+    ctx.beginPath();
+    ctx.moveTo(x + r.tl, y);
+    ctx.lineTo(x + w - r.tr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r.tr);
+    ctx.lineTo(x + w, y + h - r.br);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r.br, y + h);
+    ctx.lineTo(x + r.bl, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r.bl);
+    ctx.lineTo(x, y + r.tl);
+    ctx.quadraticCurveTo(x, y, x + r.tl, y);
+    ctx.closePath();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
+  }
+
+  // draw once on load for the overlay backdrop
+  initEntities();
+  render();
+})();
+</script>
+</body>
+</html>
